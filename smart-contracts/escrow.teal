@@ -1,0 +1,198 @@
+#pragma version 3
+gtxn 0 TypeEnum
+int appl
+==
+
+gtxn 0 ApplicationID
+int // set application id
+==
+&&
+
+global GroupSize
+int 2
+==
+&&
+
+bnz check_2_fees
+
+gtxn 0 TypeEnum
+int appl
+==
+
+gtxn 0 ApplicationID
+int // set application id
+==
+&&
+
+global GroupSize
+int 3
+==
+&&
+
+bnz check_3_fees
+
+gtxn 0 TypeEnum
+int appl
+==
+
+gtxn 0 ApplicationID
+int // set application id
+==
+&&
+
+global GroupSize
+int 4
+==
+&&
+
+bnz check_4_fees
+
+int 0
+return
+
+check_2_fees:
+gtxn 0 Fee
+int 2000
+<=
+
+gtxn 1 Fee
+int 2000
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 1 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 1 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 1 RekeyTo
+global ZeroAddress
+==
+&&
+
+return 
+
+check_3_fees:
+gtxn 0 Fee
+int 4000
+<=
+
+gtxn 1 Fee
+int 2000
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 1 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 1 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 1 RekeyTo
+global ZeroAddress
+==
+&&
+
+gtxn 2 Fee
+int 0
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 2 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 2 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 2 RekeyTo
+global ZeroAddress
+==
+&&
+
+return 
+
+check_4_fees:
+gtxn 0 Fee
+int 8000
+<=
+
+gtxn 1 Fee
+int 0
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 1 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 1 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 1 RekeyTo
+global ZeroAddress
+==
+&&
+
+gtxn 2 Fee
+int 0
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 2 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 2 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 2 RekeyTo
+global ZeroAddress
+==
+&&
+
+gtxn 3 Fee
+int 0
+<=
+&&
+
+// Prevent Asset Close-To
+gtxn 3 AssetCloseTo
+global ZeroAddress
+==
+&&
+// Prevent Close-To
+gtxn 3 CloseRemainderTo
+global ZeroAddress
+==
+&&
+// Prevent Rekey-To
+gtxn 3 RekeyTo
+global ZeroAddress
+==
+&&
+
+return

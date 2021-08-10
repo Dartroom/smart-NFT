@@ -1,0 +1,722 @@
+#pragma version 4
+
+// on creation (id is still 0) set the intial values
+txn ApplicationID
+int 0
+==
+bnz nft_creation
+
+txn OnCompletion
+int NoOp
+==
+
+byte "Escrow"
+app_global_get
+global CreatorAddress 
+!=
+&&
+bnz handle_noop
+
+txn OnCompletion
+int NoOp
+==
+
+byte "Escrow"
+app_global_get
+global CreatorAddress 
+==
+&&
+bnz update_escrow
+
+txn OnCompletion
+int OptIn
+==
+bnz handle_optin
+
+txn OnCompletion
+int CloseOut
+==
+bnz handle_closeout
+
+txn OnCompletion
+int UpdateApplication
+==
+bnz handle_updateapp
+
+txn OnCompletion
+int DeleteApplication
+==
+bnz handle_deleteapp
+
+// Unexpected OnCompletion value. Should be unreachable.
+err
+
+// nft creation
+  nft_creation:
+  byte "Title"
+  byte ""
+  app_global_put
+
+  byte "Artist"
+  byte ""
+  app_global_put
+
+  byte "Created at"
+  byte ""
+  app_global_put
+
+  byte "Owner"
+  global CreatorAddress
+  app_global_put
+
+  byte "Manager" // set manager address
+  addr 
+  app_global_put
+
+  byte "Escrow"
+  global CreatorAddress
+  app_global_put
+
+  byte "Highest bid"
+  int 0
+  app_global_put
+
+  byte "for sale"
+  int 0
+  app_global_put
+
+  byte "Duration"
+  int 0
+  app_global_put
+
+  byte "End round"
+  int 0
+  app_global_put
+
+  byte "Highest bidder"
+  global CreatorAddress
+  app_global_put
+
+  int 1
+  return
+//
+
+// NoOp
+  handle_noop:
+  // Handle NoOp (standard appcal to preform the approval program logic)
+
+  byte "for sale"
+  app_global_get
+  int 1
+  ==
+
+  byte "Owner"
+  app_global_get
+  byte "Highest bidder"
+  app_global_get
+  ==
+  &&
+
+  byte "Owner"
+  app_global_get
+  txn Sender
+  !=
+  &&
+  bnz bid_0
+
+  byte "for sale"
+  app_global_get
+  int 1
+  ==
+
+  global Round
+  byte "End round"
+  app_global_get
+  <=
+  &&
+
+  byte "Owner"
+  app_global_get
+  byte "Highest bidder"
+  app_global_get
+  !=
+  &&
+
+  byte "Owner"
+  app_global_get
+  txn Sender
+  !=
+  &&
+  bnz bid_1
+
+  byte "for sale"
+  app_global_get
+  int 1
+  ==
+
+  byte "Owner"
+  app_global_get
+  byte "Highest bidder"
+  app_global_get
+  ==
+  &&
+
+  byte "Owner"
+  app_global_get
+  txn Sender
+  ==
+  &&
+  bnz reset_auction
+
+  byte "for sale"
+  app_global_get
+  int 1
+  ==
+
+  global Round
+  byte "End round"
+  app_global_get
+  >
+  &&
+  bnz end_auction
+
+  byte "for sale"
+  app_global_get
+  int 0
+  ==
+  bnz start_auction
+
+  int 0
+  return
+//
+
+// start auction
+  start_auction:
+  txn TypeEnum
+  int appl
+  ==
+
+  txn NumAppArgs
+  int 2
+  ==
+  &&
+
+  txn Sender
+  byte "Owner"
+  app_global_get
+  ==
+  &&
+
+  txn ApplicationArgs 0
+  btoi
+  int 100
+  %                     // modulus: the remainder of price / 100
+  int 0                 // needs to be equal to 0 to make sure the royalty split works
+  ==
+  &&
+
+  txn ApplicationArgs 0
+  btoi                 
+  int 1000000                 
+  >=                   // minimum price of 1 algo
+  &&
+
+  int 800
+  txn ApplicationArgs 1
+  btoi
+  <=                  // minimum auction duration of 800 rounds (~ 1 hour)
+  &&
+
+  bnz set_auction
+  int 0
+  return
+//
+
+// set auction (end statement must return 1 to top of stack)
+  set_auction:
+
+  byte "Highest bid"
+  txn ApplicationArgs 0
+  btoi
+  app_global_put
+
+  byte "Duration"
+  txn ApplicationArgs 1
+  btoi
+  app_global_put
+
+  byte "Highest bidder"
+  txn Sender
+  app_global_put
+
+  byte "for sale"
+  int 1
+  app_global_put
+
+  int 1
+  return
+//
+
+// bid 0
+  bid_0:
+  global GroupSize
+  int 2
+  ==
+
+  gtxn 0 TypeEnum
+  int appl
+  ==
+  &&
+
+  gtxn 1 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 1 Receiver
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  gtxn 1 Amount
+  byte "Highest bid"
+  app_global_get
+  >=
+  &&
+
+  gtxn 1 Amount
+  int 100
+  %                     // modulus: the remainder of price / 100
+  int 0                 // needs to be equal to 0 to make sure the royalty split works
+  ==
+  &&
+
+  bnz set_bid_0
+
+  int 0
+  return
+//
+
+// bid 1
+  bid_1:
+  global GroupSize
+  int 3
+  ==
+
+  gtxn 0 TypeEnum
+  int appl
+  ==
+  &&
+
+  gtxn 1 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 1 Receiver
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 1000000           // bid increment of 1 algo
+  +
+  gtxn 1 Amount
+  <=
+  &&
+
+  gtxn 1 Amount
+  int 100
+  %                     // modulus: remainder of price/100
+  int 0                 // needs to be equal to nul to make sure the royalty split works
+  ==
+  &&
+
+  gtxn 2 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 2 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  gtxn 2 Receiver
+  byte "Highest bidder"
+  app_global_get
+  ==
+  &&
+
+  gtxn 2 Amount
+  byte "Highest bid"
+  app_global_get
+  ==
+  &&
+
+  bnz set_bid_1
+
+  int 0
+  return
+//
+
+// set bid 0 (end statement must return 1 to top of stack)
+  set_bid_0:
+  byte "Highest bid"
+  gtxn 1 Amount
+  app_global_put
+
+  byte "Highest bidder"
+  gtxn 1 Sender
+  app_global_put
+
+  global Round
+  byte "Duration"
+  app_global_get
+  +
+  store 10
+
+  byte "End round"
+  load 10
+  app_global_put
+
+  int 1
+  return
+//
+
+// set bid 1 (end statement must return 1 to top of stack)
+  set_bid_1:
+  byte "Highest bid"
+  gtxn 1 Amount
+  app_global_put
+
+  byte "Highest bidder"
+  gtxn 1 Sender
+  app_global_put
+
+  global Round
+  int 400
+  +                           // increase timer with 400 rounds (~ 30 min) if lower than 400 rounds
+  byte "End round"            // to always have an opportunity to overbid
+  app_global_get
+  >=
+
+  bnz add_rounds
+
+  int 1
+  return
+//
+
+// add rounds (end statement must return 1 to top of stack)
+  add_rounds:
+  global Round
+  int 400
+  +
+  store 10
+
+  byte "End round"
+  load 10
+  app_global_put
+
+  int 1
+  return 
+//
+
+// end auction
+  end_auction:
+  byte "Owner"
+  app_global_get
+  byte "Highest bidder"
+  app_global_get
+  ==                        // stop auction, only posible if no one bid
+
+  bnz reset_auction
+
+  byte "Owner"
+  app_global_get
+  global CreatorAddress
+  ==
+
+  bnz end_auction_0
+  
+  byte "Owner"
+  app_global_get
+  global CreatorAddress
+  !=
+
+  bnz end_auction_1
+
+  int 0
+  return
+//
+
+// end auction 0 (royalty split 85 / 15 between creator and manager)
+  end_auction_0:
+
+  global GroupSize
+  int 3
+  ==
+
+  gtxn 0 TypeEnum
+  int appl
+  ==
+  &&
+
+  gtxn 1 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 1 Receiver
+  global CreatorAddress
+  ==
+  &&
+
+  gtxn 1 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 100
+  /
+  int 85
+  *
+  gtxn 1 Amount
+  ==
+  &&
+
+  gtxn 2 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 2 Receiver
+  byte "Manager"
+  app_global_get
+  ==
+  &&
+
+  gtxn 2 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 100
+  /
+  int 15
+  *
+  gtxn 2 Amount
+  ==
+  &&
+
+  bnz reset_auction
+
+  int 0
+  return 
+//
+
+// end auction 1 (royalty split 85 / 10 / 5 between owner, creator and manager)
+  end_auction_1:
+
+  global GroupSize
+  int 4
+  ==
+
+  gtxn 0 TypeEnum
+  int appl
+  ==
+  &&
+
+  gtxn 1 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 1 Receiver
+  byte "Owner"
+  app_global_get
+  ==
+  &&
+
+  gtxn 1 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 100
+  /
+  int 85
+  *
+  gtxn 1 Amount
+  ==
+  &&
+
+  gtxn 2 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 2 Receiver
+  global CreatorAddress
+  ==
+  &&
+
+  gtxn 2 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 100
+  /
+  int 10
+  *
+  gtxn 2 Amount
+  ==
+  &&
+
+  gtxn 3 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 3 Receiver
+  byte "Manager"
+  app_global_get
+  ==
+  &&
+
+  gtxn 3 Sender
+  byte "Escrow"
+  app_global_get
+  ==
+  &&
+
+  byte "Highest bid"
+  app_global_get
+  int 100
+  /
+  int 5
+  *
+  gtxn 3 Amount
+  ==
+  &&
+
+  bnz reset_auction
+
+  int 0
+  return
+//
+
+// reset auction (end statement must return 1 to top of stack)
+  reset_auction:
+  byte "Highest bidder"
+  app_global_get
+  store 11
+
+  byte "Owner"
+  load 11
+  app_global_put
+
+  byte "for sale"
+  int 0
+  app_global_put
+
+  int 1
+  return
+//
+
+handle_optin:
+// Handle OptIn (allow contract to use callers local storage) Not used in this contract
+int 0
+return
+
+handle_closeout:
+// Handle CloseOut (op out of contract, can be made to fail disallowing someone to opt out) Not used in this contract
+int 0
+return
+
+// By default, disallow updating or deleting the app. Add custom authorization
+// logic below to allow updating or deletion in certain circumstances. Not used in this contract
+handle_updateapp:
+
+int 0
+return
+
+// update escrow address
+  // check if the escrow address is equal to the global creator, if not we know that escrow was already set
+  update_escrow:
+  global GroupSize
+  int 2
+  ==
+
+  gtxn 0 TypeEnum
+  int appl
+  ==
+  &&
+
+  gtxn 0 Sender
+  global CreatorAddress
+  ==
+  &&
+
+  gtxn 1 TypeEnum
+  int pay
+  ==
+  &&
+
+  gtxn 1 Sender
+  global CreatorAddress
+  ==
+  &&
+
+  gtxn 1 Amount
+  int 0
+  ==
+  &&
+
+  bnz set_escrow
+  int 0
+  return
+//
+
+// set escrow (end statement must return 1 to top of stack)
+  set_escrow:
+  byte "Escrow"
+  gtxn 1 Receiver
+  app_global_put
+
+  int 1
+  return
+//
+
+// Destroying/burning the contract, only allowed when the creator is the owner in this case
+handle_deleteapp:
+
+global CreatorAddress
+txn Sender
+==
+
+byte "Owner"
+app_global_get
+txn Sender
+==
+&&
+
+return
+err
